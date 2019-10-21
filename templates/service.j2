@@ -1,0 +1,13 @@
+[Unit]
+Description=Resync /boot/efi RAID
+DefaultDependencies=no
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/mdadm -A {{device}} --uuid={{uuid}} --update=resync
+ExecStart=/bin/mount {{mountpoint}}
+RemainAfterExit=yes
+
+[Install]
+WantedBy=sysinit.target

@@ -1,4 +1,5 @@
 from charms.reactive import when, when_not, set_flag
+from charmhelpers.core.templating import render
 import subprocess
 import json
 
@@ -49,6 +50,13 @@ def grow_raid(raid, part):
                      '--add', '/dev/{}'.format(part['name'])])
 
 
+def get_raid_uuid(raid):
+    out = subprocess.check_output(['mdadm', '--detail', raid])
+    for line in out.decode().split('\n'):
+        if 'UUID' in line:
+            return line.split(':', 1)[1].strip()
+
+
 def clone_data(source, dest):
     subprocess.call(['dd', 'if={}'.format(source), 'of={}'.format(dest)])
 
@@ -58,6 +66,20 @@ def add_efi_entry(part):
                      '/dev/{}'.format(part['name']),
                      '-p', '1', '-L', 'ubuntu#2',
                      '-l', '\\EFI\\ubuntu\\shimx64.efi'])
+
+
+def add_fstab_entry(device):
+    with open('/etc/fstab', 'a+') as f:
+        line = '{} /boot/efi vfat noauto,defaults 0 0'.format(device)
+        f.write(line + '\n')
+
+
+def add_mdadm_entry(uuid):
+    with open('/etc/mdadm/mdadm.conf', 'r+') as f:
+        content = f.read()
+        f.seek(0, 0)
+        line = 'ARRAY <ignore> UUID={}'.format(uuid)
+        f.write(line.rstrip('\r\n') + '\n' + content)
 
 
 @when_not('layer-efi-manager.installed')
@@ -72,7 +94,24 @@ def install_layer_efi_manager():
     create_raid(slave_partition, '/dev/md100')
     clone_data('/dev/{}'.format(master_partition['name']), '/dev/md100')
     umount(master_partition)
-    mount('/dev/md100', master_partition['mountpoint'])
     grow_raid('/dev/md100', master_partition)
     add_efi_entry(slave_partition)
+
+    add_fstab_entry('/dev/md100')
+    service = 'efi-resync'
+    service_file = '/etc/systemd/system/{}.service'.format(service)
+    service_template = 'service.j2'
+    context = {
+        'uuid': get_raid_uuid('/dev/md100'),
+        'device': '/dev/md100',
+        'mountpoint': master_partition['mountpoint']
+    }
+    render(service_template, service_file, context, perms=0o755)
+    add_mdadm_entry(get_raid_uuid('/dev/md100'))
+    subprocess.check_call(['update-initramfs', '-u'])
+    # Enable and start the one-shot service
+    cmd = 'systemctl enable {}'.format(service)
+    subprocess.check_call(cmd, shell=True)
+    cmd = 'systemctl start {}'.format(service)
+    subprocess.check_call(cmd, shell=True)
     set_flag('layer-efi-manager.installed')
