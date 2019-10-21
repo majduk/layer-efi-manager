@@ -1,0 +1,2 @@
+includes: ['layer:basic']  # if you use any interfaces, add them here
+repo: "https://git.launchpad.net/layer-efi-manager"

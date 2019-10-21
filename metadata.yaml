@@ -1,0 +1,15 @@
+name: efi-manager
+summary: Layer to manage EFI SW RAID
+maintainer: Michał Ajduk <Michal.Ajduk@canonical.com>
+description: |
+  EFI manager will create, sync and restore EFI partition SW RAID
+tags:
+  - misc
+requires:
+  host-system:
+    interface: "juju-info"
+    scope: "container"
+subordinate: true
+series:
+  - bionic
+

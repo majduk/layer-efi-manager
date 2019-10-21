@@ -1,0 +1,5 @@
+options:
+  autorepair:
+    description: Should the charm automatically repair EFI
+    default: true
+    type: boolean
